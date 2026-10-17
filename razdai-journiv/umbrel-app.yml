@@ -1,10 +1,9 @@
-
 manifestVersion: 1
 id: razdai-journiv
 name: Journiv
 tagline: Your private, self-hosted journal
 icon: https://raw.githubusercontent.com/journiv/journiv-app/main/frontend/public/favicon.ico
-category: Lifestyle
+category: Productivity
 version: "1.0.0"
 port: 8000
 description: >-
@@ -18,4 +17,3 @@ repo: https://github.com/journiv/journiv-app
 support: https://github.com/journiv/journiv-app/issues
 dependencies: []
 path: ""
-
