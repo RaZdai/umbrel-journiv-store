@@ -3,12 +3,11 @@ version: "3.7"
 services:
   app_proxy:
     environment:
-      # Umbrel app proxy routes to the app service using this exact container name.
+      # Umbrel routes to the app service using <app-id>_<service>_1.
       APP_HOST: razdai-journiv_server_1
       APP_PORT: 8000
 
-  # Generate a private signing key once and prepare persistent data permissions.
-  # The key is stored only in Umbrel's app data directory, never in this public repo.
+  # Create a persistent signing key outside the public GitHub repository.
   init_perms:
     image: alpine:3.22
     user: "0:0"
@@ -45,7 +44,7 @@ services:
       ENVIRONMENT: "production"
       DB_DRIVER: "sqlite"
       DATABASE_URL: "sqlite:////data/journiv.db"
-      # Umbrel's local app proxy uses HTTP on the trusted home network.
+      # Required only for access over Umbrel's trusted local HTTP proxy.
       # Do not expose this app directly to the public internet over HTTP.
       ALLOW_INSECURE_COOKIE_AUTH_OVER_HTTP: "true"
       REDIS_URL: "redis://valkey:6379/0"
