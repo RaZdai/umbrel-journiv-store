@@ -1,1 +1,142 @@
+version: "3.7"
 
+services:
+  app_proxy:
+    environment:
+      # Umbrel app proxy routes to the app service using this exact container name.
+      APP_HOST: razdai-journiv_server_1
+      APP_PORT: 8000
+
+  # Generate a private signing key once and prepare persistent data permissions.
+  # The key is stored only in Umbrel's app data directory, never in this public repo.
+  init_perms:
+    image: alpine:3.22
+    user: "0:0"
+    restart: "no"
+    volumes:
+      - ${APP_DATA_DIR}/data:/data
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mkdir -p /data/secrets /data/media /data/logs /data/exports /data/imports
+        if [ ! -s /data/secrets/secret_key ]; then
+          head -c 48 /dev/urandom | base64 | tr -d '\n' > /data/secrets/secret_key
+        fi
+        chown 1000:1000 /data /data/secrets /data/media /data/logs /data/exports /data/imports /data/secrets/secret_key
+        chmod 640 /data/secrets/secret_key
+
+  server:
+    image: swalabtech/journiv-app:latest
+    init: true
+    restart: on-failure
+    stop_grace_period: 1m
+    depends_on:
+      init_perms:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+    volumes:
+      - ${APP_DATA_DIR}/data:/data
+    environment:
+      SECRET_KEY_FILE: /data/secrets/secret_key
+      DOMAIN_NAME: "${DEVICE_DOMAIN_NAME}"
+      DOMAIN_SCHEME: "http"
+      APP_VERSION: "latest"
+      ENVIRONMENT: "production"
+      DB_DRIVER: "sqlite"
+      DATABASE_URL: "sqlite:////data/journiv.db"
+      # Umbrel's local app proxy uses HTTP on the trusted home network.
+      # Do not expose this app directly to the public internet over HTTP.
+      ALLOW_INSECURE_COOKIE_AUTH_OVER_HTTP: "true"
+      REDIS_URL: "redis://valkey:6379/0"
+      CELERY_BROKER_URL: "redis://valkey:6379/0"
+      CELERY_RESULT_BACKEND: "redis://valkey:6379/0"
+      RATE_LIMIT_STORAGE_URI: "redis://valkey:6379/1"
+      SERVICE_ROLE: "app"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/v1/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  celery-worker:
+    image: swalabtech/journiv-app:latest
+    init: true
+    restart: on-failure
+    stop_grace_period: 1m
+    depends_on:
+      init_perms:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+    volumes:
+      - ${APP_DATA_DIR}/data:/data
+    environment:
+      SECRET_KEY_FILE: /data/secrets/secret_key
+      DOMAIN_NAME: "${DEVICE_DOMAIN_NAME}"
+      DOMAIN_SCHEME: "http"
+      APP_VERSION: "latest"
+      ENVIRONMENT: "production"
+      DB_DRIVER: "sqlite"
+      DATABASE_URL: "sqlite:////data/journiv.db"
+      ALLOW_INSECURE_COOKIE_AUTH_OVER_HTTP: "true"
+      REDIS_URL: "redis://valkey:6379/0"
+      CELERY_BROKER_URL: "redis://valkey:6379/0"
+      CELERY_RESULT_BACKEND: "redis://valkey:6379/0"
+      SERVICE_ROLE: "celery-worker"
+    command:
+      - celery
+      - -A
+      - app.core.celery_app
+      - worker
+      - --loglevel=info
+      - --concurrency=1
+
+  celery-beat:
+    image: swalabtech/journiv-app:latest
+    init: true
+    restart: on-failure
+    stop_grace_period: 1m
+    depends_on:
+      init_perms:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+    volumes:
+      - ${APP_DATA_DIR}/data:/data
+    environment:
+      SECRET_KEY_FILE: /data/secrets/secret_key
+      DOMAIN_NAME: "${DEVICE_DOMAIN_NAME}"
+      DOMAIN_SCHEME: "http"
+      APP_VERSION: "latest"
+      ENVIRONMENT: "production"
+      DB_DRIVER: "sqlite"
+      DATABASE_URL: "sqlite:////data/journiv.db"
+      ALLOW_INSECURE_COOKIE_AUTH_OVER_HTTP: "true"
+      REDIS_URL: "redis://valkey:6379/0"
+      CELERY_BROKER_URL: "redis://valkey:6379/0"
+      CELERY_RESULT_BACKEND: "redis://valkey:6379/0"
+      REDBEAT_REDIS_URL: "redis://valkey:6379/2"
+      SERVICE_ROLE: "celery-beat"
+    command:
+      - celery
+      - -A
+      - app.core.celery_app
+      - beat
+      - --loglevel=info
+      - --scheduler
+      - redbeat.RedBeatScheduler
+      - --pidfile=/tmp/celerybeat.pid
+
+  valkey:
+    image: valkey/valkey:9.0-alpine
+    restart: unless-stopped
+    volumes:
+      - ${APP_DATA_DIR}/valkey:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
