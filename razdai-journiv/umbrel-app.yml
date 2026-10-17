@@ -1,1 +1,21 @@
 
+manifestVersion: 1
+id: razdai-journiv
+name: Journiv
+tagline: Your private, self-hosted journal
+icon: https://raw.githubusercontent.com/journiv/journiv-app/main/frontend/public/favicon.ico
+category: Lifestyle
+version: "1.0.0"
+port: 8000
+description: >-
+  A private, self-hosted journaling app with daily entries,
+  mood tracking, photos, and personal reflections.
+developer: Journiv
+website: https://www.journiv.com
+submitter: RaZdai
+submission: https://github.com/journiv/journiv-app
+repo: https://github.com/journiv/journiv-app
+support: https://github.com/journiv/journiv-app/issues
+dependencies: []
+path: ""
+
